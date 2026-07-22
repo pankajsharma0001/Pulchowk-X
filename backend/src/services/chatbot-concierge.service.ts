@@ -30,7 +30,9 @@ export type ConciergeIntent =
   | "club_query"
   | "lost_found_query"
   | "marketplace_query"
-  | "app_help";
+  | "app_help"
+  | "general_campus"
+  | "greeting";
 
 type SourceType = "official_page" | "office_confirmed" | "map_data";
 
@@ -225,6 +227,109 @@ const APP_HELP_HINTS = [
   "help me",
   "what features",
   "how does this app",
+];
+
+const ACADEMIC_HINTS = [
+  "semester",
+  "syllabus",
+  "course",
+  "subject",
+  "credit",
+  "grade",
+  "gpa",
+  "cgpa",
+  "backlog",
+  "back exam",
+  "regular exam",
+  "curriculum",
+  "elective",
+  "project",
+  "thesis",
+  "internship",
+  "practicals",
+  "lab",
+  "lecture",
+  "tutorial",
+  "timetable",
+  "class routine",
+  "faculty",
+  "professor",
+  "teacher",
+  "hod",
+  "head of department",
+  "scholarship",
+  "topper",
+  "pass mark",
+  "fail",
+  "attendance",
+  "absent",
+  "prerequisite",
+  "minor",
+  "major",
+  "be",
+  "bachelor",
+  "master",
+  "msc",
+  "program",
+  "engineering",
+  "degree",
+];
+
+const GENERAL_CAMPUS_HINTS = [
+  "pulchowk",
+  "campus",
+  "college",
+  "ioe",
+  "tribhuvan",
+  "tu",
+  "history",
+  "established",
+  "founded",
+  "about",
+  "tell me about",
+  "what is",
+  "students",
+  "intake",
+  "branches",
+  "departments",
+  "affiliation",
+  "accreditation",
+  "ranking",
+  "placement",
+  "alumni",
+  "campus life",
+  "extracurricular",
+  "sports",
+  "festival",
+  "annual",
+  "convocation",
+  "graduation",
+];
+
+const GREETING_HINTS = [
+  "hello",
+  "hi",
+  "hey",
+  "namaste",
+  "good morning",
+  "good afternoon",
+  "good evening",
+  "good night",
+  "sup",
+  "yo",
+  "howdy",
+  "greetings",
+  "thanks",
+  "thank you",
+  "bye",
+  "goodbye",
+  "see you",
+  "ok",
+  "okay",
+  "cool",
+  "great",
+  "nice",
+  "awesome",
 ];
 
 const LOCATION_ALIAS_MAP: Record<string, string> = {
@@ -540,6 +645,21 @@ function inferIntentFromQuery(query: string): ConciergeIntent {
     return "location_lookup";
   }
 
+  // ── Greeting (exact short-message match) ─────────────────────────────────
+  if (includesAny(normalized, GREETING_HINTS) && normalized.split(' ').length <= 5) {
+    return "greeting";
+  }
+
+  // ── Academic queries ────────────────────────────────────────────────────
+  if (includesAny(normalized, ACADEMIC_HINTS)) {
+    return "general_campus";
+  }
+
+  // ── General campus / college queries ─────────────────────────────────────
+  if (includesAny(normalized, GENERAL_CAMPUS_HINTS)) {
+    return "general_campus";
+  }
+
   return "unknown";
 }
 
@@ -656,8 +776,25 @@ function extractRouteEndpoints(query: string): { start: string; end: string } | 
       "want",
       "trying",
     ]);
+    const startLower = start.toLowerCase();
+    const isQuestionOrVerbPrefix = 
+      invalidPlainStart.has(startLower) ||
+      startLower.startsWith("how ") ||
+      startLower.startsWith("what ") ||
+      startLower.startsWith("where ") ||
+      startLower.startsWith("when ") ||
+      startLower.startsWith("why ") ||
+      startLower.startsWith("who ") ||
+      startLower.startsWith("can ") ||
+      startLower.startsWith("could ") ||
+      startLower.startsWith("should ") ||
+      startLower.startsWith("is ") ||
+      startLower.startsWith("are ") ||
+      startLower.startsWith("tell ") ||
+      startLower.startsWith("want ") ||
+      startLower.startsWith("need ");
 
-    if (!invalidPlainStart.has(start) && start.length > 2 && end.length > 2) {
+    if (!isQuestionOrVerbPrefix && start.length > 2 && end.length > 2) {
       return { start, end };
     }
   }
@@ -731,6 +868,15 @@ function resolveLocationLookup(query: string): ConciergeResponsePayload | null {
   };
 }
 
+// ── Intents that should show a physical location on the map when falling back ──
+const NAVIGATIONAL_FALLBACK_INTENTS = new Set<ConciergeIntent>([
+  "route_navigation",
+  "location_lookup",
+  "service_lookup",
+  "office_lookup",
+  "escalation",
+]);
+
 function getFallbackLocationIdsByIntent(
   intent: ConciergeIntent,
   query: string,
@@ -762,13 +908,31 @@ function getFallbackLocationIdsByIntent(
   if (intent === "escalation") {
     return ["dean-office"];
   }
-  return ["dean-office"];
+  // No default dean-office for non-navigational intents
+  return [];
 }
 
 function buildFallbackResponse(
   intent: ConciergeIntent,
   query: string,
 ): ConciergeResponsePayload {
+  // For non-navigational intents, return a text-only response (no map pin)
+  if (!NAVIGATIONAL_FALLBACK_INTENTS.has(intent)) {
+    return {
+      message: "I'm not sure about that yet, but I'm here to help with anything related to Pulchowk Campus — notices, events, clubs, navigation, academics, and more. Try asking something specific!",
+      locations: [],
+      action: "text_answer",
+      intent,
+      verified: false,
+      sources: [],
+      follow_up: [
+        "Summarize recent notices",
+        "Any upcoming events?",
+        "Where is the library?",
+      ],
+    };
+  }
+
   const fallbackKey =
     intent === "deadline_query" ||
     intent === "escalation" ||
@@ -784,6 +948,22 @@ function buildFallbackResponse(
     .map((id) => BUILDING_BY_ID.get(id))
     .filter((building): building is Building => !!building)
     .map((building) => toLocationPayload(building));
+
+  // If no locations resolved, return text-only
+  if (locations.length === 0) {
+    return {
+      message: fallback.message,
+      locations: [],
+      action: "text_answer",
+      intent,
+      verified: false,
+      sources: [],
+      follow_up:
+        fallback.follow_up ?? [
+          "Ask a specific question and I will try to help.",
+        ],
+    };
+  }
 
   return {
     message: fallback.message,
@@ -819,6 +999,7 @@ function safeJsonParse(text: string): unknown {
 function sanitizeAction(action: unknown): ConciergeAction {
   if (action === "show_route") return action;
   if (action === "show_multiple_locations") return action;
+  if (action === "text_answer") return action;
   return "show_location";
 }
 
@@ -922,6 +1103,117 @@ Return only JSON:
     };
   } catch (error) {
     console.error("LLM navigation fallback failed:", error);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// General-purpose LLM resolver for college questions
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CAMPUS_KNOWLEDGE = `
+Pulchowk Campus (officially: IOE Pulchowk Campus) is the central and premier engineering campus under the
+Institute of Engineering (IOE), Tribhuvan University (TU), Nepal. It is located in Lalitpur, Kathmandu Valley.
+
+Key facts:
+- Full name: Institute of Engineering, Pulchowk Campus
+- Established: 1972 (as Nepal Engineering Institute), became part of TU in 1984
+- Affiliation: Tribhuvan University, Institute of Engineering
+- Location: Pulchowk, Lalitpur, Nepal
+- Programs offered:
+  - Bachelor of Engineering (BE) — 4 years (8 semesters)
+    - Civil Engineering
+    - Computer Engineering
+    - Electronics, Communication & Information Engineering
+    - Electrical Engineering
+    - Mechanical Engineering
+    - Aerospace Engineering
+    - Architecture (B.Arch — 5 years)
+  - Master of Science (M.Sc.) in various engineering fields
+  - PhD programs
+- Admission: Through IOE Entrance Examination conducted by IOE
+- Semester system: 8 semesters for BE, each ~5 months
+- Grading: Internal assessments + final board exams; results published at exam.ioe.edu.np
+- Pass marks: 40% in each subject
+- Backlog policy: Students can carry failed subjects and retake in subsequent exams
+- Student clubs: LOCUS, Robotics Club, SEDS, Electrical Club, Music Club, etc.
+- Annual events: LOCUS (tech fest), Yantra (mechanical fest), sports week
+- Facilities: Library, computer labs (ICTC), workshops, hostels, canteen, sports grounds, gym
+- Campus head: Dean of IOE (administrative head of all IOE campuses)
+`.trim();
+
+async function resolveWithGeneralLlm(
+  query: string,
+  intent: ConciergeIntent,
+  history: ConversationMessage[] = [],
+): Promise<ConciergeResponsePayload | null> {
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: { responseMimeType: "application/json" },
+    });
+
+    const historyBlock = formatConversationHistory(history);
+
+    const prompt = `You are Smart Pulchowk Assistant — a helpful, knowledgeable campus companion for Pulchowk Campus (IOE, Tribhuvan University) students.
+
+About Pulchowk Campus:
+${CAMPUS_KNOWLEDGE}
+
+About the Smart Pulchowk app:
+${APP_KNOWLEDGE}
+${historyBlock ? `\n${historyBlock}` : ''}
+User query: ${query}
+
+Instructions:
+- Answer the student's question helpfully and accurately using the knowledge provided.
+- If the user refers to something from the previous conversation, resolve it using context.
+- For greetings, respond warmly and suggest what you can help with.
+- For campus-related questions, provide accurate information from the knowledge above.
+- For questions you genuinely cannot answer (not related to campus/college at all), politely say so and suggest campus-related topics you can help with.
+- Do NOT make up specific numbers, dates, or facts that are not in the context.
+- Do NOT reference any physical location or suggest going to an office unless the question is specifically about visiting an office.
+- Use markdown formatting: **bold** for emphasis, bullet lists with - for steps.
+- Keep responses concise but informative.
+- Suggest 1-3 short follow-up questions the student might ask next.
+
+Return only JSON:
+{
+  "message": "your helpful response",
+  "follow_up": ["follow-up question 1", "follow-up question 2"]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const parsed = safeJsonParse(result.response.text()) as {
+      message?: string;
+      follow_up?: string[];
+    } | null;
+
+    if (
+      !parsed ||
+      typeof parsed.message !== "string" ||
+      !parsed.message.trim()
+    ) {
+      return null;
+    }
+
+    const followUp = Array.isArray(parsed.follow_up)
+      ? parsed.follow_up
+          .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+          .slice(0, 3)
+      : [];
+
+    return {
+      message: parsed.message.trim(),
+      locations: [],
+      action: "text_answer",
+      intent,
+      verified: false,
+      sources: ["campus_knowledge", "llm:gemini-2.5-flash"],
+      follow_up: followUp,
+    };
+  } catch (error) {
+    console.error("General LLM resolution failed:", error);
     return null;
   }
 }
@@ -1144,6 +1436,7 @@ export async function resolveStudentConciergeQuery(
     return buildFallbackResponse("unknown", rawQuery);
   }
 
+  // ── Route navigation ────────────────────────────────────────────────────
   if (isRouteQuery(normalizedQuery)) {
     const deterministic = resolveDeterministicRoute(rawQuery);
     if (deterministic) return deterministic;
@@ -1156,17 +1449,39 @@ export async function resolveStudentConciergeQuery(
     return buildFallbackResponse("route_navigation", rawQuery);
   }
 
+  // ── Knowledge base match ────────────────────────────────────────────────
   const matchedEntry = matchSupportEntry(rawQuery);
   if (matchedEntry) {
     return makeSupportResponse(matchedEntry);
   }
 
+  // ── Explicit location lookup ────────────────────────────────────────────
   if (isLocationLookupQuery(rawQuery)) {
     const locationLookup = resolveLocationLookup(rawQuery);
     if (locationLookup) return locationLookup;
   }
 
   const inferredIntent = inferIntentFromQuery(rawQuery);
+
+  // ── Greetings: handle with general LLM (no map) ─────────────────────────
+  if (inferredIntent === "greeting" && allowLlm) {
+    const greeting = await resolveWithGeneralLlm(rawQuery, inferredIntent, history);
+    if (greeting) return greeting;
+    // Simple fallback greeting if LLM fails
+    return {
+      message: "Hello! 👋 I'm your Smart Pulchowk Assistant. I can help you with campus navigation, notices, events, clubs, academics, and more. What would you like to know?",
+      locations: [],
+      action: "text_answer",
+      intent: "greeting",
+      verified: true,
+      sources: [],
+      follow_up: [
+        "Summarize recent notices",
+        "Any upcoming events?",
+        "Where is the library?",
+      ],
+    };
+  }
 
   // ── App-wide intent resolution (hybrid: live DB + LLM) ──────────────────
   const isAppIntent = inferredIntent in APP_INTENT_TOPICS;
@@ -1175,6 +1490,13 @@ export async function resolveStudentConciergeQuery(
     if (appResult) return appResult;
   }
 
+  // ── General campus / academic queries: use general LLM ──────────────────
+  if (inferredIntent === "general_campus" && allowLlm) {
+    const campusResult = await resolveWithGeneralLlm(rawQuery, inferredIntent, history);
+    if (campusResult) return campusResult;
+  }
+
+  // ── Support-heavy intents: use KB fallback (may show office location) ───
   const supportHeavy =
     inferredIntent === "process_howto" ||
     inferredIntent === "policy_query" ||
@@ -1187,6 +1509,7 @@ export async function resolveStudentConciergeQuery(
     return buildFallbackResponse(inferredIntent, rawQuery);
   }
 
+  // ── Location lookup as secondary pass ───────────────────────────────────
   const locationLookup = resolveLocationLookup(rawQuery);
   if (locationLookup) return locationLookup;
 
@@ -1195,11 +1518,17 @@ export async function resolveStudentConciergeQuery(
     if (llm) return llm;
   }
 
-  // ── Final fallback: try app context for ambiguous queries ────────────────
+  // ── Final fallback: try general LLM for ANY query before giving up ──────
   if (allowLlm) {
+    // First try app context (for data-backed answers)
     const appFallback = await resolveWithAppContext(rawQuery, "app_help", history);
     if (appFallback) return appFallback;
+
+    // Then try general campus LLM (for broader college questions)
+    const generalFallback = await resolveWithGeneralLlm(rawQuery, inferredIntent, history);
+    if (generalFallback) return generalFallback;
   }
 
-  return buildFallbackResponse(inferIntentFromQuery(rawQuery), rawQuery);
+  // ── Absolute last resort: text-only fallback (no dean-office map pin) ───
+  return buildFallbackResponse(inferredIntent, rawQuery);
 }

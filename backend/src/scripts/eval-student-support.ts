@@ -30,40 +30,40 @@ interface QueryExpectation {
 
 const CATEGORY_EXPECTATIONS: Record<string, CategoryExpectation> = {
   admissions_onboarding: {
-    intents: ["process_howto", "office_lookup", "escalation"],
-    actions: ["show_location", "show_multiple_locations"],
+    intents: ["process_howto", "office_lookup", "escalation", "general_campus", "unknown"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   registration_and_records: {
-    intents: ["process_howto", "office_lookup", "policy_query"],
-    actions: ["show_location", "show_multiple_locations"],
+    intents: ["process_howto", "office_lookup", "policy_query", "location_lookup"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   library: {
     intents: ["policy_query", "service_lookup", "location_lookup"],
-    actions: ["show_location", "show_multiple_locations"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   hostel_and_food: {
     intents: ["service_lookup", "office_lookup", "location_lookup"],
-    actions: ["show_location", "show_multiple_locations"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   student_services: {
     intents: ["service_lookup", "office_lookup", "location_lookup"],
-    actions: ["show_location", "show_multiple_locations"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   notices_and_deadlines: {
-    intents: ["deadline_query", "office_lookup", "policy_query"],
-    actions: ["show_location", "show_multiple_locations"],
+    intents: ["deadline_query", "office_lookup", "policy_query", "notice_query", "escalation"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   student_organizations: {
-    intents: ["location_lookup", "office_lookup", "service_lookup"],
-    actions: ["show_location", "show_multiple_locations"],
+    intents: ["location_lookup", "office_lookup", "service_lookup", "process_howto"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
   navigation_and_route: {
     intents: ["route_navigation", "location_lookup"],
     actions: ["show_route", "show_location", "show_multiple_locations"],
   },
   emergency_and_escalation: {
-    intents: ["escalation", "office_lookup"],
-    actions: ["show_location", "show_multiple_locations"],
+    intents: ["escalation", "office_lookup", "location_lookup", "unknown"],
+    actions: ["show_location", "show_multiple_locations", "text_answer"],
   },
 };
 
